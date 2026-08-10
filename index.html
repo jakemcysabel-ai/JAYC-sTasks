@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAYC´sTasks</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f6fb;color:#182033}
+body.dark{background:#111522;color:#eef2ff}.app{max-width:1100px;margin:auto;padding:24px 18px}
+header{display:flex;justify-content:space-between;align-items:center;gap:15px;margin-bottom:20px}
+h1{margin:0;font-size:32px}.sub{opacity:.65}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.card{background:#fff;border-radius:20px;padding:20px;box-shadow:0 8px 28px #1d2a4a12;margin-bottom:16px}
+body.dark .card{background:#191e2c;box-shadow:none}
+button{border:0;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;background:#e5e9f4;color:inherit}
+body.dark button{background:#2a3042}.primary{background:#5b67f1;color:#fff}
+form{display:grid;gap:9px}input,textarea,select{width:100%;border:1px solid #d9deea;border-radius:11px;padding:11px;font:inherit;background:transparent;color:inherit}
+body.dark input,body.dark textarea,body.dark select{border-color:#394157}
+textarea{resize:vertical;min-height:70px}.tabs{display:flex;gap:8px;margin-bottom:12px}.tabs button.active{background:#5b67f1;color:#fff}
+.item{padding:12px 0;border-bottom:1px solid #e7eaf1}.item:last-child{border:0}.item.done .title{text-decoration:line-through;opacity:.45}
+.row{display:flex;align-items:center;gap:10px}.title{font-weight:700;flex:1}.meta{font-size:13px;opacity:.65;margin-top:4px}.danger{padding:7px 10px}
+.progress{height:11px;background:#e8ebf3;border-radius:99px;overflow:hidden;margin-top:8px}.bar{height:100%;width:0;background:#5b67f1}
+.calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.month{font-weight:800;font-size:20px}
+.week,.days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}.week div{text-align:center;font-size:12px;opacity:.6;padding:5px}.day{min-height:78px;border:1px solid #e3e6ee;border-radius:10px;padding:7px;cursor:pointer}.dark .day{border-color:#343b4e}.day.muted{opacity:.35}.day.selected{outline:2px solid #5b67f1}.day.today{background:#eef0ff}.dark .day.today{background:#232843}
+.num{font-weight:800;font-size:13px}.dot{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:4px}.taskdot{color:#5b67f1}.examdot{color:#e55b5b}
+.focus{text-align:center}.time{font-size:64px;font-weight:800;font-variant-numeric:tabular-nums}
+@media(max-width:800px){.grid{grid-template-columns:1fr}.day{min-height:65px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><div><h1>🚀 JAYC´sTasks</h1><div class="sub">Tus tareas, exámenes y calendario en un solo sitio.</div></div><button id="theme">🌙</button></header>
+
+<div class="grid">
+<section class="card">
+<h2>➕ Añadir</h2>
+<div class="tabs"><button class="active" id="tabTask">📝 Tarea</button><button id="tabExam">🧪 Examen</button></div>
+<form id="form">
+<input id="subject" placeholder="Asignatura (ej. Matemáticas)" required>
+<input id="title" placeholder="Qué tienes que hacer" required>
+<input id="date" type="date" required>
+<input id="timeInput" type="time">
+<textarea id="notes" placeholder="Temario, apuntes o detalles (opcional)"></textarea>
+<button class="primary">Añadir a JAYC´sTasks</button>
+</form>
+</section>
+
+<section class="card">
+<div class="calendar-head"><button id="prev">‹</button><div class="month" id="month"></div><button id="next">›</button></div>
+<div class="week"><div>L</div><div>M</div><div>X</div><div>J</div><div>V</div><div>S</div><div>D</div></div>
+<div class="days" id="days"></div>
+<div class="small" id="selectedInfo" style="margin-top:12px"></div>
+</section>
+</div>
+
+<section class="card">
+<h2 id="listTitle">📌 Próximas cosas</h2>
+<div id="list"></div>
+<div class="progress"><div class="bar" id="bar"></div></div>
+<div class="small" id="stats"></div>
+</section>
+
+<section class="card focus">
+<h2>🧠 Modo concentración</h2><div class="small">25 minutos</div>
+<div class="time" id="time">25:00</div>
+<button class="primary" id="start">▶ Empezar</button>
+<button id="reset">↻ Reiniciar</button>
+</section>
+</div>
+
+<script>
+const KEY="jayc_tasks", THEME="jayc_dark";
+let items=JSON.parse(localStorage.getItem(KEY)||"[]"), type="task";
+let view=new Date(), selected=new Date(); selected.setHours(0,0,0,0);
+let seconds=1500, interval=null;
+
+const $=x=>document.getElementById(x);
+function iso(d){return d.toISOString().slice(0,10)}
+function save(){localStorage.setItem(KEY,JSON.stringify(items));renderCalendar();renderList()}
+function setType(t){
+ type=t; $("tabTask").classList.toggle("active",t==="task"); $("tabExam").classList.toggle("active",t==="exam");
+ $("title").placeholder=t==="task"?"Qué tienes que hacer":"Nombre del examen";
+ $("subject").placeholder=t==="task"?"Asignatura (ej. Matemáticas)":"Asignatura (ej. Matemáticas)";
+ $("notes").placeholder=t==="task"?"Detalles (opcional)":"Temario, apuntes o detalles (opcional)";
+}
+$("tabTask").onclick=()=>setType("task"); $("tabExam").onclick=()=>setType("exam");
+
+$("form").onsubmit=e=>{
+ e.preventDefault();
+ items.push({id:Date.now(),type,subject:$("subject").value.trim(),title:$("title").value.trim(),date:$("date").value,time:$("timeInput").value,notes:$("notes").value.trim(),done:false});
+ $("form").reset(); save();
+};
+function renderCalendar(){
+ const y=view.getFullYear(), m=view.getMonth(); $("month").textContent=view.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+ const first=new Date(y,m,1), start=(first.getDay()+6)%7, total=new Date(y,m+1,0).getDate();
+ const prevTotal=new Date(y,m,0).getDate(); let html="";
+ for(let i=0;i<42;i++){
+  const n=i-start+1, d=new Date(y,m,n), outside=n<1||n>total;
+  const key=iso(d), dayItems=items.filter(x=>x.date===key);
+  html+=`<div class="day ${outside?'muted ':''}${key===iso(selected)?'selected ':''}${key===iso(new Date())?'today':''}" data-date="${key}">
+   <div class="num">${d.getDate()}</div>
+   ${dayItems.slice(0,3).map(x=>`<div class="dot ${x.type==='exam'?'examdot':'taskdot'}">${x.type==='exam'?'🧪':'📝'} ${esc(x.title)}</div>`).join("")}
+   ${dayItems.length>3?`<div class="dot">+${dayItems.length-3} más</div>`:""}
+  </div>`;
+ }
+ $("days").innerHTML=html;
+ document.querySelectorAll(".day").forEach(el=>el.onclick=()=>{selected=new Date(el.dataset.date+"T00:00:00");renderCalendar();renderList()});
+ const count=items.filter(x=>x.date===iso(selected)).length;
+ $("selectedInfo").textContent=count?`${selected.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}: ${count} elemento${count===1?"":"s"}.`:`${selected.toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"})}: nada programado.`;
+}
+function renderList(){
+ const selectedKey=iso(selected);
+ let arr=items.filter(x=>x.date===selectedKey).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+ $("listTitle").textContent="📌 "+selected.toLocaleDateString("es-ES",{day:"numeric",month:"long"});
+ if(!arr.length) $("list").innerHTML='<div class="small">No hay tareas ni exámenes este día.</div>';
+ else $("list").innerHTML=arr.map(x=>`<div class="item ${x.done?'done':''}">
+  <div class="row"><input type="checkbox" ${x.done?'checked':''} onchange="toggle(${x.id})">
+  <span class="title">${x.type==="exam"?"🧪":"📝"} ${esc(x.subject)} — ${esc(x.title)}</span><button class="danger" onclick="removeItem(${x.id})">🗑️</button></div>
+  <div class="meta">${x.time?x.time+" · ":""}${x.type==="exam"?"Examen":"Tarea"}${x.notes?" · "+esc(x.notes):""}</div>
+ </div>`).join("");
+ const done=items.filter(x=>x.done).length,total=items.length,pct=total?Math.round(done/total*100):0;
+ $("bar").style.width=pct+"%"; $("stats").textContent=`${done}/${total} completadas · ${pct}%`;
+}
+function toggle(id){const x=items.find(a=>a.id===id);x.done=!x.done;save()}
+function removeItem(id){items=items.filter(x=>x.id!==id);save()}
+function esc(s){return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+$("prev").onclick=()=>{view.setMonth(view.getMonth()-1);renderCalendar()};
+$("next").onclick=()=>{view.setMonth(view.getMonth()+1);renderCalendar()};
+
+function updateTimer(){let m=Math.floor(seconds/60),s=seconds%60;$("time").textContent=`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`}
+$("start").onclick=()=>{if(interval){clearInterval(interval);interval=null;$("start").textContent="▶ Continuar";return} $("start").textContent="⏸ Pausar";interval=setInterval(()=>{if(seconds){seconds--;updateTimer()}else{clearInterval(interval);interval=null;$("start").textContent="▶ Empezar";alert("🎉 ¡Sesión terminada!")}},1000)};
+$("reset").onclick=()=>{clearInterval(interval);interval=null;seconds=1500;updateTimer();$("start").textContent="▶ Empezar"};
+$("theme").onclick=()=>{document.body.classList.toggle("dark");localStorage.setItem(THEME,document.body.classList.contains("dark"));$("theme").textContent=document.body.classList.contains("dark")?"☀️":"🌙"};
+if(localStorage.getItem(THEME)==="true"){document.body.classList.add("dark");$("theme").textContent="☀️"}
+$("date").value=iso(selected); setType("task"); renderCalendar();renderList();updateTimer();
+</script>
+</body>
+</html>
